@@ -66,6 +66,10 @@ func (g *gateway) begin(w http.ResponseWriter, r *http.Request, endpoint string)
 		writeError(w, http.StatusUnauthorized, "invalid_request_error", "invalid_api_key", "", "a valid API key is required")
 		return nil
 	}
+	if r.ContentLength > maxBodyBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error", "body_too_large", "", "the request body is larger than 20 MiB")
+		return nil
+	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
 		var tooLarge *http.MaxBytesError

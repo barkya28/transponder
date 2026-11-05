@@ -122,7 +122,7 @@ func (failOnReadBody) Close() error { return nil }
 
 func TestChatCompletionsDeclaredBodyTooLargeWithoutReading(t *testing.T) {
 	e := setup(t, echo.New("echo"))
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", failOnReadBody{t: t})
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/chat/completions", failOnReadBody{t: t})
 	req.Header.Set("Authorization", "Bearer "+e.key)
 	req.ContentLength = (20 << 20) + 1
 	res := httptest.NewRecorder()
@@ -146,7 +146,7 @@ func TestChatCompletionsDeclaredBodyTooLargeWithoutReading(t *testing.T) {
 func TestChatCompletionsUnknownLengthBodyTooLarge(t *testing.T) {
 	e := setup(t, echo.New("echo"))
 	big := `{"model":"m","messages":[{"role":"user","content":"` + strings.Repeat("a", 20<<20) + `"}]}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(big))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/chat/completions", strings.NewReader(big))
 	req.Header.Set("Authorization", "Bearer "+e.key)
 	req.ContentLength = -1
 	res := httptest.NewRecorder()

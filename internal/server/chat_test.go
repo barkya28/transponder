@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -106,6 +107,57 @@ func TestChatCompletionsBodyTooLarge(t *testing.T) {
 	big := `{"model":"m","messages":[{"role":"user","content":"` + strings.Repeat("a", 20<<20) + `"}]}`
 	if res := e.post(t, big); res.status != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d", res.status)
+	}
+}
+
+// failOnReadBody detects attempts to read a request rejected using Content-Length.
+type failOnReadBody struct{ t *testing.T }
+
+func (b failOnReadBody) Read([]byte) (int, error) {
+	b.t.Error("read oversized request body despite declared Content-Length")
+	return 0, errors.New("unexpected request body read")
+}
+
+func (failOnReadBody) Close() error { return nil }
+
+func TestChatCompletionsDeclaredBodyTooLargeWithoutReading(t *testing.T) {
+	e := setup(t, echo.New("echo"))
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", failOnReadBody{t: t})
+	req.Header.Set("Authorization", "Bearer "+e.key)
+	req.ContentLength = (20 << 20) + 1
+	res := httptest.NewRecorder()
+	e.srv.Config.Handler.ServeHTTP(res, req)
+
+	got := result{status: res.Code, body: res.Body.Bytes()}
+	if got.status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusRequestEntityTooLarge)
+	}
+	if code := errorCode(t, got); code != "body_too_large" {
+		t.Fatalf("code = %q, want body_too_large", code)
+	}
+	if n := len(e.usage(t)); n != 0 {
+		t.Fatalf("oversized request produced %d usage records", n)
+	}
+	if ok := e.post(t, ping); ok.status != http.StatusOK {
+		t.Fatalf("normal request status = %d", ok.status)
+	}
+}
+
+func TestChatCompletionsUnknownLengthBodyTooLarge(t *testing.T) {
+	e := setup(t, echo.New("echo"))
+	big := `{"model":"m","messages":[{"role":"user","content":"` + strings.Repeat("a", 20<<20) + `"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(big))
+	req.Header.Set("Authorization", "Bearer "+e.key)
+	req.ContentLength = -1
+	res := httptest.NewRecorder()
+	e.srv.Config.Handler.ServeHTTP(res, req)
+
+	got := result{status: res.Code, body: res.Body.Bytes()}
+	if got.status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusRequestEntityTooLarge)
+	}
+	if code := errorCode(t, got); code != "body_too_large" {
+		t.Fatalf("code = %q, want body_too_large", code)
 	}
 }
 

@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject requests declaring bodies larger than 20 MiB before reading them.
+
 ## [0.1.1] - 2026-11-05
 
 ### Fixed
